@@ -1,0 +1,4 @@
+*.gif
+*.pyc
+*.png
+.vscode/*

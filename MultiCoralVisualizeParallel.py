@@ -7,14 +7,12 @@ import os
 from mpl_toolkits.mplot3d import Axes3D
 
 
-def randomInRadius(radius, seedX, seedY, seedZ, lock):
-    lock.acquire()
+def randomInRadius(radius, seedX, seedY, seedZ):
     theta = 0.5*np.pi*random.random()
     phi = 2*np.pi*random.random()
     x = seedX + int(radius*np.cos(phi)*np.sin(theta))
     y = seedY + int(radius*np.sin(phi)*np.sin(theta))
     z = seedZ + int(radius*np.cos(theta))
-    lock.release()
     return [x, y, z]
 
 
@@ -22,8 +20,7 @@ def checkOutRadius(seed, p, radius):
     return np.sqrt((seed[0]-p[0])**2+(seed[1]-p[1])**2+(seed[2]-p[2])**2) > radius
 
 
-def checkAround(location, envSize, mat, seed, radius, lock):
-    lock.acquire()
+def checkAround(location, envSize, mat, seed, radius):
     foundOtherParticles = False
     reachLimit = False
     outTheSphere = False
@@ -161,23 +158,10 @@ def checkAround(location, envSize, mat, seed, radius, lock):
             location = [x+1, y+1, z-1]
         else:
             location = [x+1, y+1, z+1]
-    lock.release()
     return(location, foundOtherParticles, reachLimit, outTheSphere)
 
 
-def DLA(oneD_mat, radius, gif, inputRandomWalkerCount, inputUsedInterval, inputAddedCount, envSize, lock):
-
-    mat = np.frombuffer(oneD_mat.get_obj())
-    mat = mat.reshape(envSize, envSize, envSize)
-
-    randomWalkerCount = inputRandomWalkerCount.value
-
-    usedInterval = np.frombuffer(inputUsedInterval.get_obj())
-    usedInterval = usedInterval.reshape(10000)
-    print(usedInterval)
-
-    addedCount = inputAddedCount.value
-
+def DLA(mat, radius, gif, randomWalkerCount, usedInterval, addedCount, envSize):
     print("randomWalkerCount, usedInterval, addedCount, envSize"),
     print(randomWalkerCount, " ", usedInterval, " ", addedCount, " ", envSize)
     random.seed()
@@ -185,78 +169,38 @@ def DLA(oneD_mat, radius, gif, inputRandomWalkerCount, inputUsedInterval, inputA
     seedX = int(random.random() * envSize)
     seedY = int(random.random() * envSize)
     seedZ = 2
-
-    lock.acquire()
     mat[seedX][seedY][seedZ] = 1
-    lock.release()
 
     isComplete = False
     while not isComplete:
-        lock.acquire()
         randomWalkerCount += 1
-        lock.release()
 
         location = randomInRadius(
-            radius=radius, seedX=seedX, seedY=seedY, seedZ=seedZ, lock = lock
+            radius=radius, seedX=seedX, seedY=seedY, seedZ=seedZ
         )
         foundOtherParticles = False
         reachLimit = False
         while not foundOtherParticles and not reachLimit:
             newLocation, foundOtherParticles, reachLimit, outTheSphere = checkAround(
-                location=location, envSize=envSize, mat=mat, seed=[seedX, seedY, seedZ], radius=radius, lock = lock)
+                location=location, envSize=envSize, mat=mat, seed=[seedX, seedY, seedZ], radius=radius)
 
             if foundOtherParticles:
                 print(foundOtherParticles,
                       location[0], location[1], location[2])
-                lock.acquire()
                 mat[location[0], location[1], location[2]] = 1
                 addedCount += 1
-                lock.release()
             else:
                 location = newLocation
 
-        intervalSavePic = range(0, 400000, 100)
+        intervalSavePic = range(0, 400000, 25)
         if randomWalkerCount in intervalSavePic:
             print("still working, have added ", randomWalkerCount,
                   " random walkers.", " Added to cluster: ", addedCount)
-        if gif:
-            if randomWalkerCount in intervalSavePic:
-                print("save picture")
-                # append to the used count
-                lock.acquire()
-                np.append(usedInterval, randomWalkerCount)
-                lock.release()
-                label = str(randomWalkerCount)
-                filename = "multicorals/cluster"+label+".png"
-                # print(filename)
-                plt.title("DLA Cluster", fontsize=20)
-                plt.figure()
-                ax = plt.subplot(projection='3d')
-                ax.voxels(mat, facecolor='red', edgecolor='pink')
-                # plt.cm.Blues) #ocean, Paired
-                # plt.matshow(mat, interpolation='nearest', cmap=colorMap)
-                # plt.xlabel("direction, $x$", fontsize=15)
-                # plt.ylabel("direction, $y$", fontsize=15)
-                plt.savefig(filename, dpi=200)
-                plt.close()
-
         if randomWalkerCount == 400000:
             print("CAUTION: had to break the cycle, taking too many iterations")
             isComplete = True
         if foundOtherParticles and outTheSphere:
             print("Random walkers in the cluster: ", addedCount)
             isComplete = True
-    lock.acquire()
-    oneD_mat = mat.reshape(envSize*envSize*envSize)
-    lock.release()
-    # plt.title("DLA Cluster", fontsize=20)
-    # # plt.cm.Blues) #ocean, Paired
-    # plt.figure()
-    # ax = plt.subplot(projection='3d')
-    # ax.voxels(mat, facecolor='red', edgecolor='pink')
-    # # plt.ylabel("direction, $y$", fontsize=15)
-    # plt.savefig("multicorals/cluster.png", dpi=200)
-    # plt.close()
-    print(usedInterval)
 
     return(mat, randomWalkerCount, usedInterval, addedCount)

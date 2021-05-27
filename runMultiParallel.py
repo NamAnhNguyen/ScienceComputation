@@ -1,63 +1,61 @@
-from multiprocessing import Process, Array, Value, Lock
-import os
-from MultiCoralVisualizeParallel import DLA
 import numpy as np
 import imageio
-import ctypes as c
+import os
+
+import multiprocessing
+from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-
-def info(title):
-    print(title)
-    print('module name:', __name__)
-    print('parent process:', os.getppid())
-    print('process id:', os.getpid())
-
-
-def f(name):
-    info('function f')
-    print('hello', name)
+from MultiCoralVisualize import DLA
 
 
 if not os.path.isdir("multicorals"):
     os.mkdir("multicorals")
-
 envSize = 50
-matSize = envSize * envSize * envSize
-print(matSize)
-mat = Array(c.c_int64, matSize)
-randomWalkerCount = Value('i', 0)
-usedInterval = Array(c.c_int64, 10000)
-addedCount = Value('i', 0)
+mat = np.zeros((envSize, envSize, envSize))
+randomWalkerCount = 0
+usedInterval = []
+addedCount = 0
 
-if __name__ == '__main__':
-    lock = Lock()
-    procs = [Process(target=DLA, args=(mat, 5, True, randomWalkerCount,
-                                       usedInterval, addedCount, envSize, lock))
-             for i in range(10)]
-    for p in procs:
-        p.start()
-    for p in procs:
-        p.join()
 
-    ThreeD_mat = np.frombuffer(mat.get_obj())
-    ThreeD_mat = ThreeD_mat.reshape(envSize, envSize, envSize)
-    plt.title("DLA Cluster", fontsize=20)
-    # plt.cm.Blues) #ocean, Paired
-    plt.figure()
-    ax = plt.subplot(projection='3d')
-    ax.voxels(ThreeD_mat, facecolor='red', edgecolor='pink')
-    # plt.ylabel("direction, $y$", fontsize=15)
-    plt.savefig("multicorals/cluster.png", dpi=200)
-    plt.close()
+def doJob(i):
+    DLA(mat, 5, True, randomWalkerCount, usedInterval, addedCount, envSize)
 
-    with imageio.get_writer('multicorals/movie.gif', mode='I') as writer:
-        for i in usedInterval:
-            if i != 0:
-                filename = "multicorals/cluster"+str(i)+".png"
-                image = imageio.imread(filename)
-                writer.append_data(image)
-                os.remove(filename)
-        image = imageio.imread("multicorals/cluster.png")
+
+if __name__ == "__main__":
+
+    pool = multiprocessing.Pool(processes=4)
+    input = range(0, 100)
+    result = pool.map(doJob, input)
+    pool.close()
+    pool.join
+    # processed_list = Parallel(n_jobs=5, backend="threading")(
+    #     delayed(doJob)(i) for i in range(0, 10))
+    # if randomWalkerCount in range(0, 400000, 25):
+    #     print("save picture")
+    #     # append to the used count
+    #     usedInterval.append(randomWalkerCount)
+    #     label = str(randomWalkerCount)
+    #     filename = "multicorals/cluster"+label+".png"
+    #     # print(filename)
+    #     plt.title("DLA Cluster", fontsize=20)
+    #     plt.figure()
+    #     ax = plt.subplot(projection='3d')
+    #     ax.voxels(mat, facecolor='red', edgecolor='pink')
+    #     # plt.cm.Blues) #ocean, Paired
+    #     # plt.matshow(mat, interpolation='nearest', cmap=colorMap)
+    #     # plt.xlabel("direction, $x$", fontsize=15)
+    #     # plt.ylabel("direction, $y$", fontsize=15)
+    #     plt.savefig(filename, dpi=200)
+    #     plt.close()
+
+
+with imageio.get_writer('multicorals/movie.gif', mode='I') as writer:
+    for i in usedInterval:
+        filename = "multicorals/cluster"+str(i)+".png"
+        image = imageio.imread(filename)
         writer.append_data(image)
+        os.remove(filename)
+    # image = imageio.imread("multicorals/cluster.png")
+    # writer.append_data(image)
